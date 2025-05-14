@@ -5,7 +5,7 @@
 import argparse, logging, os
 import numpy as np
 from time import sleep
-from jack_fluidsynth import Fluidsynth
+from jack_fluidsynth import JackFluidsynth
 
 
 if __name__ == "__main__":
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 		format = "[%(filename)24s:%(lineno)-4d] %(message)s"
 	)
 
-	with Fluidsynth() as fs:
+	with JackFluidsynth() as fs:
 		fs.auto_connect = True
 		filename = os.path.join('res', 'tiny-tim.sf2')
 		bank, program = (128, 0) if options.drums else (0, 0)
@@ -32,7 +32,7 @@ if __name__ == "__main__":
 		fs.audio_on()
 
 		if options.notes:
-			print("Fluidsynth.play_note ...", end='')
+			print("JackFluidsynth.play_note ...", end='')
 			fs.play_note(60 , 100 , 400 )
 			fs.play_note(67 , 100 , 400 )
 			fs.play_note(64 , 100 , 198 )
@@ -44,7 +44,7 @@ if __name__ == "__main__":
 			sleep(0.25)
 
 		if options.pygame:
-			print("Fluidsynth.play_pygame_midi_events ...", end='')
+			print("JackFluidsynth.play_pygame_midi_events ...", end='')
 			fs.play_pygame_midi_events([
 				[[144, 48, 109, 0], 1135],
 				[[144, 48, 0, 0], 1267],
@@ -61,13 +61,13 @@ if __name__ == "__main__":
 			sleep(0.25)
 
 		if options.midi:
-			print("Fluidsynth.play_midi_file ...", end='')
+			print("JackFluidsynth.play_midi_file ...", end='')
 			fs.play_midi_file(os.path.join('res', ('drums.mid' if options.drums else 'piano.mid')))
 			print("done")
 			sleep(0.25)
 
 		if options.midicsv:
-			print("Fluidsynth.play_midicsv_file ...", end='')
+			print("JackFluidsynth.play_midicsv_file ...", end='')
 			fs.play_midicsv_file(os.path.join('res', ('midicsv-drums.csv' if options.drums else 'midicsv-piano.csv')))
 			print("done")
 			sleep(0.25)
@@ -78,15 +78,15 @@ if __name__ == "__main__":
 			if options.save_files:
 				import soundfile as sf
 			elif fs.use_jack:
-				from jack_audio import JackPlayer
-				jplay = JackPlayer()
+				from jack_audio_player import JackAudioPlayer
+				jplay = JackAudioPlayer()
 			else:
 				from pygame import mixer
 				from pygame.mixer import Sound
 				from fluidsynth import raw_audio_string
 				mixer.init()
 
-			print("Fluidsynth.get_samples_dual_float ...", end='')
+			print("JackFluidsynth.get_samples_dual_float ...", end='')
 			left, right = fs.get_samples_dual_float(80)
 			fs.noteon(0, 48, 110)
 			left, right = fs.get_samples_dual_float(fs.samplerate)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 				sf.write('float_samples_left.wav', left, fs.samplerate, subtype='FLOAT')
 				sf.write('float_samples_right.wav', right, fs.samplerate, subtype='FLOAT')
 			elif fs.use_jack:
-				print('   JackPlayer.play_native_stereo (%s) ...' % left.dtype, end='')
+				print('   JackAudioPlayer.play_native_stereo (%s) ...' % left.dtype, end='')
 				jplay.play_native_stereo(left, right)
 				print("done")
 			else:
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 				sleep(s.get_length())
 				print("done")
 
-			print("Fluidsynth.get_samples ...", end='')
+			print("JackFluidsynth.get_samples ...", end='')
 			fs.noteon(0, 48, 110)
 			samples = fs.get_samples(fs.samplerate)
 			fs.noteoff(0, 48)
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 			if options.save_files:
 				sf.write('get_samples.wav', samples, int(fs.samplerate * 2), subtype='PCM_16')
 			elif fs.use_jack:
-				print('   JackPlayer.play_int16_interleaved (%s) ...' % samples.dtype, end='')
+				print('   JackAudioPlayer.play_int16_interleaved (%s) ...' % samples.dtype, end='')
 				jplay.play_int16_interleaved(samples)
 				print("done")
 			else:
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 				sleep(s.get_length())
 				print("done")
 
-			print("Fluidsynth.get_samples_dual ...", end='')
+			print("JackFluidsynth.get_samples_dual ...", end='')
 			fs.noteon(0, 48, 110)
 			left, right = fs.get_samples_dual(fs.samplerate)
 			fs.noteoff(0, 48)
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 				sf.write('get_samples_dual_left.wav', left, fs.samplerate, subtype='PCM_16')
 				sf.write('get_samples_dual_right.wav', right, fs.samplerate, subtype='PCM_16')
 			elif fs.use_jack:
-				print('   JackPlayer.play_int16_stereo (%s) ...' % left.dtype, end='')
+				print('   JackAudioPlayer.play_int16_stereo (%s) ...' % left.dtype, end='')
 				jplay.play_int16_stereo(left, right)
 				print("done")
 			else:

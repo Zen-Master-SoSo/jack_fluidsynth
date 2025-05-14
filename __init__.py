@@ -60,7 +60,7 @@ class PresetEnum:
 
 
 
-class Fluidsynth(fluidsynth.Synth):
+class JackFluidsynth(fluidsynth.Synth):
 
 	auto_connect		= False	# Set to True to connect to system outputs
 
