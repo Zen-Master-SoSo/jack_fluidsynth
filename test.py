@@ -77,82 +77,61 @@ if __name__ == "__main__":
 			fs.audio_off()
 			if options.save_files:
 				import soundfile as sf
-			elif fs.use_jack:
+			else:
 				from jack_audio_player import JackAudioPlayer
 				jplay = JackAudioPlayer()
+
+			note_length = fs.samplerate
+			tail_length = int(fs.samplerate * 0.25)
+
+			print("JackFluidsynth.get_samples ...", end='')
+			samples = fs.get_samples(80)
+			fs.noteon(0, 48, 110)
+			samples = fs.get_samples(note_length)
+			fs.noteoff(0, 48)
+			tail = fs.get_samples(tail_length)
+			total_samples = np.concatenate((samples, tail))
+			print(' %d samples' % len(total_samples))
+			if options.save_files:
+				sf.write('get_samples.wav', total_samples, int(fs.samplerate * 2), subtype='PCM_16')
 			else:
-				from pygame import mixer
-				from pygame.mixer import Sound
-				from fluidsynth import raw_audio_string
-				mixer.init()
+				print('   JackAudioPlayer.play_int16_interleaved (%s) ...' % samples.dtype, end='')
+				jplay.play_int16_interleaved(total_samples)
+				print("done")
+
+			print("JackFluidsynth.get_samples_dual ...", end='')
+			left, right = fs.get_samples_dual(80)
+			fs.noteon(0, 48, 110)
+			left, right = fs.get_samples_dual(note_length)
+			fs.noteoff(0, 48)
+			tail_left, tail_right = fs.get_samples_dual(tail_length)
+			total_left = np.concatenate((left, tail_left))
+			total_right = np.concatenate((right, tail_right))
+			print(' %d, %d samples' % (len(total_left), len(total_right)))
+			if options.save_files:
+				sf.write('get_samples_dual_left.wav', total_left, fs.samplerate, subtype='PCM_16')
+				sf.write('get_samples_dual_right.wav', total_right, fs.samplerate, subtype='PCM_16')
+			else:
+				print('   JackAudioPlayer.play_int16_stereo (%s) ...' % left.dtype, end='')
+				jplay.play_int16_stereo(total_left, total_right)
+				print("done")
 
 			print("JackFluidsynth.get_samples_dual_float ...", end='')
 			left, right = fs.get_samples_dual_float(80)
 			fs.noteon(0, 48, 110)
-			left, right = fs.get_samples_dual_float(fs.samplerate)
+			left, right = fs.get_samples_dual_float(note_length)
 			fs.noteoff(0, 48)
-			print(' %d, %d samples' % (len(left), len(right)))
-			if options.save_files:
-				sf.write('float_samples_left.wav', left, fs.samplerate, subtype='FLOAT')
-				sf.write('float_samples_right.wav', right, fs.samplerate, subtype='FLOAT')
-			elif fs.use_jack:
-				print('   JackAudioPlayer.play_native_stereo (%s) ...' % left.dtype, end='')
-				jplay.play_native_stereo(left, right)
-				print("done")
-			else:
-				dtype = np.int16
-				s = Sound(raw_audio_string(left.astype(dtype)))
-				s.play()
-				print('   sleep %.2f seconds ...' % s.get_length(), end='')
-				sleep(s.get_length())
-				print("done")
-				s = Sound(raw_audio_string(right.astype(dtype)))
-				s.play()
-				print('   sleep %.2f seconds ...' % s.get_length(), end='')
-				sleep(s.get_length())
-				print("done")
+			tail_left, tail_right = fs.get_samples_dual_float(tail_length)
+			total_left = np.concatenate((left, tail_left))
+			total_right = np.concatenate((right, tail_right))
 
-			print("JackFluidsynth.get_samples ...", end='')
-			fs.noteon(0, 48, 110)
-			samples = fs.get_samples(fs.samplerate)
-			fs.noteoff(0, 48)
-			print(' %d samples' % len(samples))
+			print(' %d, %d samples' % (len(total_left), len(total_right)))
 			if options.save_files:
-				sf.write('get_samples.wav', samples, int(fs.samplerate * 2), subtype='PCM_16')
-			elif fs.use_jack:
-				print('   JackAudioPlayer.play_int16_interleaved (%s) ...' % samples.dtype, end='')
-				jplay.play_int16_interleaved(samples)
-				print("done")
+				sf.write('float_samples_left.wav', total_left, fs.samplerate, subtype='FLOAT')
+				sf.write('float_samples_right.wav', total_right, fs.samplerate, subtype='FLOAT')
 			else:
-				s = Sound(raw_audio_string(samples[::2]))
-				s.play()
-				print('   sleep %.2f seconds ...' % s.get_length(), end='')
-				sleep(s.get_length())
+				print('   JackAudioPlayer.play_native_stereo (%s) ...' % total_left.dtype, end='')
+				jplay.play_native_stereo(total_left, total_right)
 				print("done")
-
-			print("JackFluidsynth.get_samples_dual ...", end='')
-			fs.noteon(0, 48, 110)
-			left, right = fs.get_samples_dual(fs.samplerate)
-			fs.noteoff(0, 48)
-			print(' %d, %d samples' % (len(left), len(right)))
-			if options.save_files:
-				sf.write('get_samples_dual_left.wav', left, fs.samplerate, subtype='PCM_16')
-				sf.write('get_samples_dual_right.wav', right, fs.samplerate, subtype='PCM_16')
-			elif fs.use_jack:
-				print('   JackAudioPlayer.play_int16_stereo (%s) ...' % left.dtype, end='')
-				jplay.play_int16_stereo(left, right)
-				print("done")
-			else:
-				s = Sound(raw_audio_string(left))
-				s.play()
-				print('   sleep %.2f seconds ...' % s.get_length(), end='')
-				sleep(s.get_length())
-				print("done")
-				s = Sound(raw_audio_string(right))
-				s.play()
-				print('   sleep %.2f seconds ...' % s.get_length(), end='')
-				sleep(s.get_length())
-				print("done")
-
 
 #  end jack_fluidsynth/test.py

@@ -78,18 +78,13 @@ class JackFluidsynth(fluidsynth.Synth):
 	__audio_out_enabled	= False
 
 
-	def __init__(self, gain=1.0, samplerate=44100, channels=256, **kwargs):
-		try:
-			self.__jack_client = jack.Client(self.__class__.__name__, no_start_server=True)
-			self.samplerate = self.__jack_client.samplerate
-			self.use_jack = True
-			self.driver = 'jack'
-		except Exception as e:
-			self.driver = 'alsa'
-			self.samplerate = samplerate
-			self.use_jack = False
-		logging.debug('Using JACK' if self.use_jack else 'Using ALSA')
+	def __init__(self, client_name = None, gain = 1.0, channels = 128, **kwargs):
+		self.__jack_client = jack.Client(
+			self.__class__.__name__ if client_name is None else client_name,
+			no_start_server = True
+		)
 		self.settings = fluidsynth.new_fluid_settings()
+		self.setting('audio.driver', 'jack')
 		self.setting('synth.gain', gain)
 		self.setting('synth.midi-channels', channels)
 		self.setting('synth.sample-rate', float(self.samplerate))
@@ -109,16 +104,18 @@ class JackFluidsynth(fluidsynth.Synth):
 	def close(self):
 		self.stop_playback()
 		self.system_reset()
-		if self.use_jack:
-			self.__jack_client.deactivate()
-			self.__jack_client.close()
+		self.__jack_client.deactivate()
+		self.__jack_client.close()
 		self.delete()
+
+	@property
+	def samplerate(self):
+		return self.__jack_client.samplerate
 
 	def audio_on(self):
 		if not self.__audio_out_enabled:
-			logging.debug('Starting fluidsynth with the %s audio driver', self.driver)
-			self.start(driver=self.driver)
-			if self.use_jack and self.auto_connect:
+			self.start()
+			if self.auto_connect:
 				self.connect_jack_system_ports()
 			self.__audio_out_enabled = True
 
@@ -355,25 +352,6 @@ class JackFluidsynth(fluidsynth.Synth):
 		self.noteoff(channel, key)
 		np.append(samples, self.get_samples(int(self.__jack_client.samplerate * off_duration)))
 		return (samples[::2], samples[1::2])
-
-	def sample_float(self, key, channel=0, velocity=88, on_duration=2.0, off_duration=2.0):
-		"""
-		Returns tuple of nparray(float), left and right channels
-		"""
-		buflen = length * sizeof(c_float)
-		buffers = (c_char_p * 2)()
-		left = create_string_buffer(buflen)
-		right = create_string_buffer(buflen)
-		buffers[:] = [ c_char_p(left.raw), c_char_p(right.raw) ]
-		if fluid_synth_process(self.synth, length, 0, None, 2, buffers) != 0:
-			raise Exception("fluid_synth_process failed")
-		print('buffers is ' + type(buffers).__name__)
-		print('buffers[0] is ' + type(buffers[0]).__name__)
-		print('left channel is ' + type(left).__name__)
-		return (
-			np.frombuffer(left[:], dtype=float),
-			np.frombuffer(right[:], dtype=float)
-		)
 
 	def echo_pygame_event(self, event):
 		n, t = event
