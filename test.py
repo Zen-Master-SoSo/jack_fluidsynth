@@ -79,7 +79,7 @@ if __name__ == "__main__":
 				import soundfile as sf
 			else:
 				from jack_audio_player import JackAudioPlayer
-				jplay = JackAudioPlayer()
+				jplay = JackAudioPlayer(auto_connect = True)
 
 			note_length = fs.samplerate
 			tail_length = int(fs.samplerate * 0.25)
