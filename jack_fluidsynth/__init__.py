@@ -1,7 +1,26 @@
 #  jack_fluidsynth/__init__.py
 #
-#  Copyright 2025 liyang <liyang@veronica>
+#  Copyright 2025 Leon Dionne <ldionne@dridesign.sh.cn>
 #
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+"""
+A wrapper for fluidsynth.Synth with extra methods for playing midi files,
+listing SoundFont presets, and capturing samples.
+"""
 import fluidsynth, jack, logging
 import numpy as np
 from time import sleep
@@ -9,6 +28,8 @@ from os.path import abspath
 from pprint import pprint
 from mido import MidiFile
 from ctypes import c_void_p, c_short, c_float, c_int, c_char_p, sizeof, create_string_buffer, byref, pointer, POINTER
+
+__version__ = "1.0.0"
 
 
 fluid_sequencer_remove_events = fluidsynth.cfunc('fluid_sequencer_remove_events', None,
