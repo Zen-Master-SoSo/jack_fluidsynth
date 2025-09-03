@@ -21,13 +21,15 @@
 A wrapper for fluidsynth.Synth with extra methods for playing midi files,
 listing SoundFont presets, and capturing samples.
 """
-import fluidsynth, jack, logging
-import numpy as np
+import re, logging
 from time import sleep
 from os.path import abspath
 from pprint import pprint
+from ctypes import	c_void_p, c_short, c_float, c_int, c_char_p, sizeof, \
+					create_string_buffer, byref, pointer, POINTER
 from mido import MidiFile
-from ctypes import c_void_p, c_short, c_float, c_int, c_char_p, sizeof, create_string_buffer, byref, pointer, POINTER
+import fluidsynth, jack
+import numpy as np
 
 __version__ = "1.0.0"
 
@@ -71,10 +73,8 @@ class PresetEnum:
 		self.preset = preset
 		self.name = name
 
-
 	def __unicode__(self):
-		return u"PresetEnum[{0.bank:03}:{0.preset:03} {0.name}]".format(self)
-
+		return f'PresetEnum[{self.bank:03}:{self.preset:03} {self.name}]'
 
 	def __repr__(self):
 		return self.__unicode__()
@@ -112,6 +112,7 @@ class JackFluidsynth(fluidsynth.Synth):
 		for opt,val in kwargs.items():
 			self.setting(opt, val)
 		self.synth = fluidsynth.new_fluid_synth(self.settings)
+		self.__previous_gain = 0.0
 		self.audio_driver = None
 		self.midi_driver = None
 		self.router = None
@@ -148,7 +149,7 @@ class JackFluidsynth(fluidsynth.Synth):
 	def start_sequencer(self):
 		if self.__sequencer is None:
 			logging.debug('Starting sequencer')
-			self.__sequencer = fluidsynth.Sequencer(use_system_timer=False)
+			self.__sequencer = fluidsynth.Sequencer(use_system_timer = False)
 			self.__synthid = self.__sequencer.register_fluidsynth(self)
 
 	def stop_playback(self):
@@ -157,11 +158,11 @@ class JackFluidsynth(fluidsynth.Synth):
 			self.__sequencer = None
 
 	def out_ports(self):
-		return [p for p in self.__jack_client.get_ports(name_pattern='fluidsynth.*')]
+		return list(self.__jack_client.get_ports(name_pattern = 'fluidsynth.*'))
 
 	def connect_jack_system_ports(self):
 		sources = self.out_ports()
-		targets = [p for p in self.__jack_client.get_ports(is_input=True, is_physical=True)]
+		targets = list(self.__jack_client.get_ports(is_input = True, is_physical = True))
 		for source, target in zip(sources, targets):
 			logging.debug('Connecting %s to %s', source.name, target.name)
 			self.__jack_client.connect(source, target)
@@ -191,7 +192,8 @@ class JackFluidsynth(fluidsynth.Synth):
 			del self.__sfids[soundfont]
 			del self.__presets[soundfont]
 			del self.__channels[soundfont]
-			logging.debug('Unloaded soundfont "%s" with sfid %d; %d sfids remaining', soundfont, sfid, len(self.__sfids))
+			logging.debug('Unloaded soundfont "%s" with sfid %d; %d sfids remaining',
+				soundfont, sfid, len(self.__sfids))
 		else:
 			logging.debug('Request to unload a soundfont which is not loaded: "%s"', soundfont)
 
@@ -221,7 +223,7 @@ class JackFluidsynth(fluidsynth.Synth):
 			for p in self.presets(soundfont):
 				if p.name == moniker:
 					return p
-		raise IndexError('Preset "%s" not found' % moniker)
+		raise IndexError(f'Preset "{moniker}" not found')
 
 	def presets(self, soundfont):
 		"""
@@ -229,7 +231,7 @@ class JackFluidsynth(fluidsynth.Synth):
 		"""
 		soundfont = abspath(soundfont)
 		if soundfont not in self.__presets:
-			self.__presets[soundfont] = [ p for p in self.__iter_presets(soundfont) ]
+			self.__presets[soundfont] = list(self.__iter_presets(soundfont))
 		return self.__presets[soundfont]
 
 	def __iter_presets(self, soundfont):
@@ -247,14 +249,14 @@ class JackFluidsynth(fluidsynth.Synth):
 	def assign_program(self, channel, soundfont, bank, program):
 		if 0 <= channel <= 127 and 0 <= bank <= 128 and 0 <= program <= 127:
 			if fluidsynth.fluid_synth_bank_select(self.synth, channel, bank):
-				raise Exception("fluid_synth_bank_select error")
+				raise RuntimeError("fluid_synth_bank_select error")
 			sfid = self.sfid(soundfont)
 			if fluidsynth.fluid_synth_program_select(self.synth, channel, sfid, bank, program):
-				raise Exception("fluid_synth_program_select error")
+				raise RuntimeError("fluid_synth_program_select error")
 			sfkey = abspath(soundfont)
 			if sfkey not in self.__channels:
 				self.__channels[sfkey] = {}
-			self.__channels[sfkey]["%03d:%03d" % (bank, program)] = channel
+			self.__channels[sfkey][f"{bank:03d}:{program:03d}"] = channel
 		else:
 			raise ValueError()
 
@@ -262,41 +264,21 @@ class JackFluidsynth(fluidsynth.Synth):
 		soundfont = abspath(soundfont)
 		if soundfont not in self.__channels:
 			return None
-		key = "%03d:%03d" % (bank, program)
+		key = f"{bank:03d}:{program:03d}"
 		if key in self.__channels[soundfont]:
 			return self.__channels[soundfont][key]
 		return None
 
-	def play_note(self, pitch, velocity, duration, channel=0, block=True):
+	def play_note(self, pitch, velocity, duration, channel = 0, block = True):
 		self.start_sequencer()
-		self.__sequencer.note_on(time=0, absolute=False, channel=channel, key=pitch, velocity=velocity, dest=self.__synthid)
-		self.__sequencer.note_on(time=duration, absolute=False, channel=channel, key=pitch, velocity=0, dest=self.__synthid)
+		self.__sequencer.note_on(time = 0, absolute = False, channel = channel, key = pitch,
+			velocity = velocity, dest = self.__synthid)
+		self.__sequencer.note_on(time = duration, absolute = False, channel = channel, key = pitch,
+			velocity = 0, dest = self.__synthid)
 		if block:
 			sleep(duration / 1000)
 
-	def play_pygame_midi_events(self, events, channel=0, block=True):
-		"""
-		Returns the duration in milliseconds of the midi events played.
-		"""
-		self.start_sequencer()
-		events = [ event for event in events if event[0][0] & 0xE0 == 0x80 ]
-		first_tick = events[0][1]
-		for event in events:
-			tup, tick = event
-			status, pitch, velo, orginal_channel = tup
-			tick -= first_tick
-			if status & 0xE0 == 0x80:
-				# def note_off(self, time, channel, key, source=-1, dest=-1, absolute=True):
-				self.__sequencer.note_off(tick, channel, pitch, dest=self.__synthid, absolute=False)
-			else:
-				# def note_on(self, time, channel, key, velocity=127, source=-1, dest=-1, absolute=True):
-				self.__sequencer.note_on(tick, channel, pitch, velo, dest=self.__synthid, absolute=False)
-		duration = tick
-		if block:
-			sleep(duration / 1000 + 0.1)
-		return duration
-
-	def play_midicsv_file(self, filename, channel=0, block=True):
+	def play_midicsv_file(self, filename, channel = 0, block = True):
 		"""
 		Returns the duration in milliseconds of the midi events played.
 		"""
@@ -304,12 +286,11 @@ class JackFluidsynth(fluidsynth.Synth):
 			csv = f.readlines()
 		return self.play_midicsv(csv, channel, block)
 
-	def play_midicsv(self, csv, channel=0, block=True):
+	def play_midicsv(self, csv, channel = 0, block = True):
 		"""
 		Returns the duration in milliseconds of the midi events played.
 		"""
 		self.start_sequencer()
-		tpb_scale = 1.0
 		first_on_time = None
 		last_off_time = None
 		for line in csv:
@@ -321,15 +302,17 @@ class JackFluidsynth(fluidsynth.Synth):
 				else:
 					last_off_time = t
 				if int(tup[5].strip(' \r\n')) == 0:
-					self.__sequencer.note_off(time=t, channel=channel, key=int(tup[4]), absolute=False, dest=self.__synthid)
+					self.__sequencer.note_off(time = t, channel = channel, key = int(tup[4]),
+						absolute = False, dest = self.__synthid)
 				else:
-					self.__sequencer.note_on(time=t, channel=channel, key=int(tup[4]), velocity=int(tup[5]), absolute=False, dest=self.__synthid)
+					self.__sequencer.note_on(time = t, channel = channel, key = int(tup[4]),
+						velocity = int(tup[5]), absolute = False, dest = self.__synthid)
 		duration = last_off_time - first_on_time
 		if block:
 			sleep(duration / 1000 + 0.1)
 		return duration
 
-	def play_midi_file(self, filename, channel=None, block=True):
+	def play_midi_file(self, filename, channel = None, block = True):
 		"""
 		Returns the duration in milliseconds of the midi events played.
 
@@ -347,23 +330,29 @@ class JackFluidsynth(fluidsynth.Synth):
 				if msg.type == 'note_on':
 					tick += msg.time
 					if msg.velocity == 0:
-						self.__sequencer.note_off(time=tick, channel=msg.channel, key=msg.note, absolute=False, dest=self.__synthid)
+						self.__sequencer.note_off(time = tick, channel = msg.channel,
+							key = msg.note, absolute = False, dest = self.__synthid)
 					else:
-						self.__sequencer.note_on(time=tick, channel=msg.channel, key=msg.note, velocity=msg.velocity, absolute=False, dest=self.__synthid)
+						self.__sequencer.note_on(time = tick, channel = msg.channel,
+							key = msg.note, velocity = msg.velocity, absolute = False,
+							dest = self.__synthid)
 		else:
 			for msg in mid.merged_track:
 				if msg.type == 'note_on':
 					tick += msg.time
 					if msg.velocity == 0:
-						self.__sequencer.note_off(time=tick, channel=channel, key=msg.note, absolute=False, dest=self.__synthid)
+						self.__sequencer.note_off(time = tick, channel = channel,
+							key = msg.note, absolute = False, dest = self.__synthid)
 					else:
-						self.__sequencer.note_on(time=tick, channel=channel, key=msg.note, velocity=msg.velocity, absolute=False, dest=self.__synthid)
+						self.__sequencer.note_on(time = tick, channel = channel,
+						key = msg.note, velocity = msg.velocity, absolute = False,
+						dest = self.__synthid)
 		duration = tick
 		if block:
 			sleep(duration / 1000 + 0.1)
 		return duration
 
-	def sample_int(self, key, channel=0, velocity=88, on_duration=2.0, off_duration=2.0):
+	def sample_int(self, key, channel = 0, velocity = 88, on_duration = 2.0, off_duration = 2.0):
 		"""
 		Returns tuple of nparray(int16), left and right channels
 		"""
@@ -375,11 +364,11 @@ class JackFluidsynth(fluidsynth.Synth):
 		return (samples[::2], samples[1::2])
 
 	def echo_pygame_event(self, event):
-		n, t = event
-		status, pitch, velo, channel = n
+		n, _ = event
+		_, pitch, velo, channel = n
 		self.noteon(channel, pitch, velo)
 
-	def play_pygame_midi_events(self, events, block=True):
+	def play_pygame_midi_events(self, events, block = True):
 		self.start_sequencer()
 		if events[0][0][2] == 0:
 			events.pop(0)
@@ -389,8 +378,9 @@ class JackFluidsynth(fluidsynth.Synth):
 		last_off_time = events[len(events)-1][1]
 		for event in events:
 			n, t = event
-			status, pitch, velo, channel = n
-			self.__sequencer.note_on(time = t - first_on_time, absolute=False, channel=channel, key=pitch, velocity=velo, dest=self.__synthid)
+			_, pitch, velo, channel = n
+			self.__sequencer.note_on(time = t - first_on_time, absolute = False, channel = channel,
+				key = pitch, velocity = velo, dest = self.__synthid)
 		if block:
 			elapsed_ticks = last_off_time - first_on_time
 			sleep(elapsed_ticks / 1000 + 0.05)
@@ -401,11 +391,12 @@ class JackFluidsynth(fluidsynth.Synth):
 		"""
 		left = create_string_buffer(length * 2)
 		right = create_string_buffer(length * 2)
-		if fluidsynth.fluid_synth_write_s16(self.synth, length, byref(left), 0, 1, byref(right), 0, 1):
-			raise Exception("fluid_synth_write_s16 failed")
+		if fluidsynth.fluid_synth_write_s16(self.synth, length,
+			byref(left), 0, 1, byref(right), 0, 1):
+			raise RuntimeError("fluid_synth_write_s16 failed")
 		return (
-			np.frombuffer(left[:], dtype=np.int16),
-			np.frombuffer(right[:], dtype=np.int16)
+			np.frombuffer(left[:], dtype = np.int16),
+			np.frombuffer(right[:], dtype = np.int16)
 		)
 
 	def get_samples_dual_float(self, length):
@@ -418,10 +409,10 @@ class JackFluidsynth(fluidsynth.Synth):
 		bufptype = POINTER(type(left)) * 2
 		buffers = bufptype(pointer(left), pointer(right))
 		if fluid_synth_process(self.synth, length, 0, None, 2, buffers) != 0:
-			raise Exception("fluid_synth_process failed")
+			raise RuntimeError("fluid_synth_process failed")
 		return (
-			np.frombuffer(left[:], dtype=np.float32),
-			np.frombuffer(right[:], dtype=np.float32)
+			np.frombuffer(left[:], dtype = np.float32),
+			np.frombuffer(right[:], dtype = np.float32)
 		)
 
 
