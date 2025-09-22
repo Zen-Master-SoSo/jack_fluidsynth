@@ -1,6 +1,6 @@
 #  jack_fluidsynth/test.py
 #
-#  Copyright 2024 liyang <liyang@veronica>
+#  Copyright 2024 Leon Dionne <ldionne@dridesign.sh.cn>
 #
 import argparse, logging, os
 import numpy as np
