@@ -31,7 +31,7 @@ from mido import MidiFile
 import fluidsynth, jack
 import numpy as np
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 
 fluid_sequencer_remove_events = fluidsynth.cfunc('fluid_sequencer_remove_events', None,
