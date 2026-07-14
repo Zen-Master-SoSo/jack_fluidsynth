@@ -11,7 +11,7 @@ classifiers = [
 	"Topic :: Multimedia :: Sound/Audio :: MIDI"
 ]
 dynamic = ["version", "description"]
-dependencies = ["JACK-Client", "fluidsynth", "numpy", "mido"]
+dependencies = ["JACK-Client", "pyFluidSynth", "numpy", "mido"]
 
 [project.urls]
 Home = "https://github.com/Zen-Master-SoSo/jack_fluidsynth"
